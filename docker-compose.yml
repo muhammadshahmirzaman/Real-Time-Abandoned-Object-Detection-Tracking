@@ -1,0 +1,12 @@
+#RULE: can be change according to use cases
+services:
+  object-detector:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: harbor.qbscocloud.net:30003/verseye-project/plugging-inference-mock:latest
+    ports:
+      - "50051:50051"
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
