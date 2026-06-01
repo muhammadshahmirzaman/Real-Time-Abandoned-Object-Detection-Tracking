@@ -4,7 +4,9 @@ from pathlib import Path
 from concurrent import futures
 import grpc
 from compiler_generated.simple_object_detector_pb2_grpc import add_ObjectDetectionServicer_to_server
+from compiler_generated.abandoned_detection_pb2_grpc import add_AbandonedDetectionServiceServicer_to_server
 from inference import NewImplObjectDetectionServicer
+from abandoned_inference import AbandonedDetectionServicer
 from interceptors.auth import AuthInterceptor
 def serve():
 
@@ -21,6 +23,11 @@ def serve():
 
     add_ObjectDetectionServicer_to_server(
         NewImplObjectDetectionServicer(),# Rule:only this line is changed according to use cases
+        server
+    )
+
+    add_AbandonedDetectionServiceServicer_to_server(
+        AbandonedDetectionServicer(),
         server
     )
 

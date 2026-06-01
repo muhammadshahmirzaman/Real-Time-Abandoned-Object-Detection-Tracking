@@ -1,0 +1,88 @@
+syntax = "proto3";
+
+package abandoned_detection;
+
+// ─────────────────────────────────────────────────────────────
+// SHARED TYPES
+// ─────────────────────────────────────────────────────────────
+
+message BoundingBox {
+  int32 x1 = 1;
+  int32 y1 = 2;
+  int32 x2 = 3;
+  int32 y2 = 4;
+}
+
+// ─────────────────────────────────────────────────────────────
+// FRAME REQUEST  (client → server)
+// ─────────────────────────────────────────────────────────────
+
+message Detection {
+  BoundingBox bbox      = 1;
+  int32       class_id  = 2;   // 0=person, 13=bench, 56=chair, etc.
+  float       confidence = 3;
+}
+
+message FrameRequest {
+  int32             frame_no          = 1;
+  double            timestamp_sec     = 2;  // frame_no / fps
+  repeated Detection detections       = 3;  // all YOLO detections for this frame
+  int32             frame_width       = 4;
+  int32             frame_height      = 5;
+
+  // Raw diff blobs from FirstFrameBaseline (computed on client)
+  repeated BoundingBox diff_blobs     = 6;
+
+  // Baseline furniture detected on the very first frame
+  repeated Detection baseline_furniture = 7;
+
+  // Send only on frame 1 so the server can init its baseline
+  bool is_first_frame = 8;
+}
+
+// ─────────────────────────────────────────────────────────────
+// FRAME RESPONSE  (server → client)
+// ─────────────────────────────────────────────────────────────
+
+message TrackResult {
+  int32       tid       = 1;
+  string      state     = 2;   // owned / unattended / warning / abandoned / furniture / suppressed / confirming
+  BoundingBox bbox      = 3;
+  int32       owner_tid = 4;   // -1 if none
+  int32       store_sid = 5;   // -1 if not in store
+}
+
+message AbandonedZone {
+  int32       sid              = 1;
+  int32       cx               = 2;
+  int32       cy               = 3;
+  BoundingBox bbox             = 4;
+  double      first_seen_ts    = 5;
+  double      last_seen_ts     = 6;
+  bool        picked_up        = 7;
+  double      duration_seconds = 8;
+}
+
+message FrameResponse {
+  int32                  frame_no          = 1;
+  repeated TrackResult   tracks            = 2;
+  repeated AbandonedZone abandoned_zones   = 3;
+
+  // Counts for progress display
+  int32 person_count    = 4;
+  int32 warning_count   = 5;
+  int32 owned_count     = 6;
+  int32 abandoned_count = 7;
+}
+
+// ─────────────────────────────────────────────────────────────
+// SERVICE
+// ─────────────────────────────────────────────────────────────
+
+service AbandonedDetectionService {
+  // Bidirectional streaming: client pushes frames, server pushes back results
+  rpc ProcessFrameStream (stream FrameRequest) returns (stream FrameResponse);
+
+  // Optional unary call for a single frame (useful for testing)
+  rpc ProcessFrame (FrameRequest) returns (FrameResponse);
+}
