@@ -1,12 +1,15 @@
 #RULE: can be change according to use cases
 services:
-  object-detector:
+  abandoned-detector:
     build:
       context: .
       dockerfile: Dockerfile
-    image: harbor.qbscocloud.net:30003/verseye-project/plugging-inference-mock:latest
+    image: harbor.qbscocloud.net:30003/verseye-project/plugging-inference-abandoned:latest
     ports:
       - "50051:50051"
     environment:
       - PYTHONUNBUFFERED=1
+#      - MAX_MESSAGE_MB=${MAX_MESSAGE_MB:-64}
+#      - GRPC_USERNAME=${GRPC_USERNAME:-verseye}
+#      - GRPC_PASSWORD=${GRPC_PASSWORD:-verseye1@3}
     restart: unless-stopped

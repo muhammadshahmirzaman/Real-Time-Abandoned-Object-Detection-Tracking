@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package pipeline.v1;
+
+// =========================
+// Pipeline Service
+// =========================
+
+service PipelineService {
+  // Returns the stages supported by the service.
+  rpc GetStageNames(GetStageNamesRequest) returns (GetStageNamesResponse);
+
+  // Checks whether the service is healthy.
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+// =========================
+// Stage
+// =========================
+
+message Stage {
+  string name = 1;
+  string display_name = 2;
+}
+
+// =========================
+// Get Stage Names
+// =========================
+
+message GetStageNamesRequest {
+}
+
+message GetStageNamesResponse {
+  repeated Stage stages = 1;
+}
+
+// =========================
+// Health Check
+// =========================
+
+message HealthCheckRequest {
+}
+
+message HealthCheckResponse {
+  HealthStatus status = 1;
+  string message = 2;
+}
+
+enum HealthStatus {
+  HEALTH_STATUS_UNSPECIFIED = 0;
+  HEALTH_STATUS_SERVING = 1;
+  HEALTH_STATUS_NOT_SERVING = 2;
+}

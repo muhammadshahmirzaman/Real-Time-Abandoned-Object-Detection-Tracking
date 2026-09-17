@@ -1,33 +1,45 @@
+import os
 import sys
+from concurrent import futures
 from pathlib import Path
 
-from concurrent import futures
+sys.path.insert(0, str(Path(__file__).resolve().parent / "compiler_generated"))
+
 import grpc
-from compiler_generated.simple_object_detector_pb2_grpc import add_ObjectDetectionServicer_to_server
-from compiler_generated.abandoned_detection_pb2_grpc import add_AbandonedDetectionServiceServicer_to_server
-from inference import NewImplObjectDetectionServicer
+
 from abandoned_inference import AbandonedDetectionServicer
+from compiler_generated.abandoned_detection_pb2_grpc import add_AbandonedDetectionServiceServicer_to_server
 from interceptors.auth import AuthInterceptor
+from compiler_generated.plugin_gateway_pb2_grpc import add_PipelineServiceServicer_to_server
+from utils.pipeline_service import PipelineServiceImpl
+
+
+MAX_MESSAGE_MB = int(os.getenv("MAX_MESSAGE_MB", "64"))
+
+
 def serve():
+    max_bytes = MAX_MESSAGE_MB * 1024 * 1024
 
     server = grpc.server(
         futures.ThreadPoolExecutor(max_workers=4),
         interceptors=[
-            AuthInterceptor()  # Uncomment to enable authentication
+            AuthInterceptor()
         ],
         options=[
-        ("grpc.max_send_message_length", 20 * 1024 * 1024),
-        ("grpc.max_receive_message_length", 20 * 1024 * 1024),
-    ],
+            ("grpc.max_send_message_length", max_bytes),
+            ("grpc.max_receive_message_length", max_bytes),
+        ],
     )
 
-    add_ObjectDetectionServicer_to_server(
-        NewImplObjectDetectionServicer(),# Rule:only this line is changed according to use cases
+    servicer = AbandonedDetectionServicer()
+
+    add_AbandonedDetectionServiceServicer_to_server(
+        servicer,
         server
     )
 
-    add_AbandonedDetectionServiceServicer_to_server(
-        AbandonedDetectionServicer(),
+    add_PipelineServiceServicer_to_server(
+        PipelineServiceImpl(servicer),
         server
     )
 
@@ -35,7 +47,7 @@ def serve():
 
     server.start()
 
-    print("🚀 gRPC Object Detection Server Running on :50051")
+    print("🚀 gRPC Abandoned Inference Server Running on :50051")
 
     server.wait_for_termination()
 

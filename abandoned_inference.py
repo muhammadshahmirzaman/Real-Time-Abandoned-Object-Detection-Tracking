@@ -484,3 +484,103 @@ class AbandonedDetectionServicer(pb2_grpc.AbandonedDetectionServiceServicer):
         )
         session.close()
         return resp
+
+
+def run_local_simulation():
+    print("=== RUNNING LOCAL SIMULATION TEST FOR ABANDONED DETECTION ===")
+    session = SessionState(W=1280, H=720, fps=15.0)
+    
+    # We will simulate 150 frames (10 seconds at 15 fps)
+    fps = 15.0
+    total_seconds = 10.0
+    total_frames = int(total_seconds * fps)
+    
+    # Stationary diff blob at (200, 200, 220, 220)
+    obj_bbox = (200, 200, 220, 220)
+    
+    print("\nSimulating tracking state transitions over 10 seconds:")
+    print("-" * 90)
+    print(f"{'Frame':<8} | {'Time (s)':<10} | {'Person Bbox':<28} | {'Tracked Objects State'}")
+    print("-" * 90)
+    
+    for i in range(total_frames):
+        ts = i / fps
+        
+        # Person bbox: Starts near the object, moves away after t=2.0s
+        if ts < 2.0:
+            person_bbox = (200, 200, 250, 300)
+        else:
+            person_bbox = (600, 600, 650, 700)
+            
+        person_bboxes = [person_bbox]
+        diff_bboxes = [obj_bbox]
+        
+        # Update tracker
+        confirmed = session.tracker.update(diff_bboxes, ts, session.store)
+        # Classify states
+        classified = session.classifier.classify(
+            confirmed, person_bboxes, [], ts, (session.W, session.H), session.store
+        )
+        session.store.expire_picked_up()
+        
+        # Print info
+        tracks_info = []
+        for t in classified:
+            tracks_info.append(f"ID {t.tid}: {t.state} (owner_tid: {t.owner_tid if t.owner_tid is not None else -1})")
+            
+        tracks_str = ", ".join(tracks_info) if tracks_info else "No confirmed tracks"
+        
+        # Print every 15 frames, or when state transitions to abandoned or warning
+        is_transition = any(t.state in ["abandoned", "warning"] for t in classified)
+        if i % 15 == 0 or is_transition:
+            person_str = f"({person_bbox[0]}, {person_bbox[1]}) -> ({person_bbox[2]}, {person_bbox[3]})"
+            print(f"{i:<8} | {ts:<10.2f} | {person_str:<28} | {tracks_str}")
+            
+        if len(session.store) > 0:
+            print("\n[SUCCESS] Object successfully detected as ABANDONED in AbandonedStore!")
+            for sid, rec in session.store.records.items():
+                print(f" - Zone ID {sid}: Centroid {rec.locked_centroid}, Bbox {rec.bbox}, Duration: {ts - rec.first_seen_ts:.2f}s")
+            break
+
+
+def run_grpc_server():
+    import grpc
+    from concurrent import futures
+    server = grpc.server(
+        futures.ThreadPoolExecutor(max_workers=4),
+        options=[
+            ("grpc.max_send_message_length", 20 * 1024 * 1024),
+            ("grpc.max_receive_message_length", 20 * 1024 * 1024),
+        ],
+    )
+    pb2_grpc.add_AbandonedDetectionServiceServicer_to_server(
+        AbandonedDetectionServicer(),
+        server
+    )
+    server.add_insecure_port("0.0.0.0:50051")
+    server.start()
+    print("Standalone Abandoned Detection gRPC Server Running on port 50051")
+    try:
+        server.wait_for_termination()
+    except KeyboardInterrupt:
+        print("\nStopping server...")
+        server.stop(0)
+
+
+if __name__ == "__main__":
+    import argparse
+    import sys
+    from pathlib import Path
+    
+    # Ensure compiler_generated is visible on sys.path
+    sys.path.insert(0, str(Path(__file__).resolve().parent / "compiler_generated"))
+    
+    parser = argparse.ArgumentParser(description="Run Abandoned Inference module.")
+    parser.add_argument("--server", action="store_true", help="Start the gRPC server on port 50051")
+    args = parser.parse_args()
+    
+    if args.server:
+        run_grpc_server()
+    else:
+        run_local_simulation()
+
